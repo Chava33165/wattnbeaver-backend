@@ -1,8 +1,15 @@
 // src/models/Gamification.js
 const db = require('../services/database');
+const GamificationProcessor = require('../processors/gamification/GamificationProcessor');
+const AchievementEvaluator = require('../processors/gamification/AchievementEvaluator');
+const ChallengeEvaluator = require('../processors/gamification/ChallengeEvaluator');
+const StreakCalculator = require('../processors/gamification/StreakCalculator');
 
 /**
  * Modelo de Gamificación
+ *
+ * Este modelo ahora utiliza los procesadores automáticos de gamificación
+ * para evaluar logros, retos y rachas de forma inteligente
  */
 class Gamification {
   /**
@@ -349,7 +356,7 @@ class Gamification {
   static getUserRank(userId) {
     const stmt = db.prepare(`
       SELECT rank FROM (
-        SELECT 
+        SELECT
           u.id,
           ROW_NUMBER() OVER (ORDER BY ug.total_points DESC) as rank
         FROM users u
@@ -357,9 +364,162 @@ class Gamification {
       )
       WHERE id = ?
     `);
-    
+
     const result = stmt.get(userId);
     return result ? result.rank : null;
+  }
+
+  /**
+   * ========================================
+   * MÉTODOS CON PROCESADORES AUTOMÁTICOS
+   * ========================================
+   */
+
+  /**
+   * Procesar gamificación automática completa para un usuario
+   * (Se ejecuta cuando llegan nuevas lecturas de IoT)
+   */
+  static async processGamification(userId) {
+    return await GamificationProcessor.processUser(userId);
+  }
+
+  /**
+   * Obtener perfil completo optimizado para Flutter
+   */
+  static getProfileComplete(userId) {
+    return GamificationProcessor.getUserProfile(userId);
+  }
+
+  /**
+   * Obtener logros con evaluación automática de progreso
+   */
+  static getUserAchievementsWithProgress(userId) {
+    // Obtener todos los logros con progreso
+    const achievements = this.getUserAchievements(userId);
+
+    // Actualizar progreso automáticamente
+    for (const achievement of achievements) {
+      if (!achievement.completed) {
+        const evaluation = AchievementEvaluator.evaluateAchievement(userId, achievement);
+        achievement.auto_progress = evaluation.progress;
+        achievement.target_value = evaluation.target;
+        achievement.completion_percentage = Math.min(100, Math.round((evaluation.progress / evaluation.target) * 100));
+      }
+    }
+
+    return achievements;
+  }
+
+  /**
+   * Obtener retos activos con progreso actualizado
+   */
+  static getUserChallengesWithProgress(userId) {
+    // Evaluar todos los retos
+    const evaluation = ChallengeEvaluator.evaluateAll(userId);
+
+    // Obtener retos actualizados
+    return this.getUserChallenges(userId);
+  }
+
+  /**
+   * Obtener información de racha actual
+   */
+  static getStreakInfo(userId) {
+    const streakInfo = StreakCalculator.calculateStreak(userId);
+    const profile = this.getProfile(userId);
+
+    return {
+      current_streak: streakInfo.currentStreak,
+      best_streak: profile?.best_streak || 0,
+      last_activity_date: streakInfo.lastActivityDate,
+      should_increment: streakInfo.shouldIncrement,
+      milestone: StreakCalculator.getStreakMilestone(streakInfo.currentStreak)
+    };
+  }
+
+  /**
+   * Evaluar y actualizar racha diaria
+   */
+  static async evaluateDailyStreak(userId) {
+    return await StreakCalculator.evaluateDailyStreak(userId);
+  }
+
+  /**
+   * Obtener logros desbloqueados recientemente
+   */
+  static getRecentAchievements(userId, hours = 24) {
+    return GamificationProcessor.getRecentAchievements(userId, hours);
+  }
+
+  /**
+   * Obtener retos completados recientemente
+   */
+  static getRecentChallenges(userId, hours = 24) {
+    return GamificationProcessor.getRecentChallenges(userId, hours);
+  }
+
+  /**
+   * Obtener leaderboard optimizado
+   */
+  static getLeaderboardOptimized(limit = 10, orderBy = 'points') {
+    return GamificationProcessor.getLeaderboard(limit, orderBy);
+  }
+
+  /**
+   * Obtener ranking del usuario con contexto
+   */
+  static getUserRankWithContext(userId) {
+    const rank = GamificationProcessor.getUserRank(userId);
+    const profile = this.getProfile(userId);
+    const leaderboard = this.getLeaderboardOptimized(10);
+
+    return {
+      user_rank: rank,
+      total_points: profile?.total_points || 0,
+      current_level: profile?.current_level || 1,
+      top_10: leaderboard
+    };
+  }
+
+  /**
+   * Obtener estadísticas del sistema
+   */
+  static getSystemStats() {
+    return GamificationProcessor.getSystemStats();
+  }
+
+  /**
+   * Asignar reto a usuario
+   */
+  static assignChallengeToUser(userId, challengeId) {
+    return ChallengeEvaluator.assignChallenge(userId, challengeId);
+  }
+
+  /**
+   * Obtener retos disponibles para el usuario
+   */
+  static getAvailableChallenges(userId) {
+    return ChallengeEvaluator.getAvailableChallenges(userId);
+  }
+
+  /**
+   * Obtener resumen completo para dashboard de Flutter
+   */
+  static getDashboardSummary(userId) {
+    const profile = this.getProfileComplete(userId);
+    const recentAchievements = this.getRecentAchievements(userId, 24);
+    const recentChallenges = this.getRecentChallenges(userId, 24);
+    const streakInfo = this.getStreakInfo(userId);
+    const rank = GamificationProcessor.getUserRank(userId);
+
+    return {
+      profile,
+      streak: streakInfo,
+      rank,
+      recent_achievements: recentAchievements,
+      recent_challenges: recentChallenges,
+      has_new_content: recentAchievements.length > 0 || recentChallenges.length > 0
+    };
   }
 }
 

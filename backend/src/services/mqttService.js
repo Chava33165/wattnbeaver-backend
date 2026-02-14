@@ -171,9 +171,12 @@ class MQTTService {
       // ⭐ NUEVO: Guardar en base de datos
       const readingsService = require('./readingsService');
       console.log(`💾 Intentando guardar lectura de energía: ${deviceId}`);
-      const savedId = readingsService.saveEnergyReading(deviceId, processedData);
-      if (savedId) {
-        console.log(`✅ Lectura de energía guardada: ID ${savedId}`);
+      const savedReading = readingsService.saveEnergyReading(deviceId, processedData);
+      if (savedReading) {
+        console.log(`✅ Lectura de energía guardada: ID ${savedReading}`);
+
+        // 🎮 GAMIFICACIÓN AUTOMÁTICA: Procesar después de guardar lectura
+        this.processGamification(savedReading.userId);
       }
 
       // Verificar alertas
@@ -210,14 +213,17 @@ class MQTTService {
       // ⭐ NUEVO: Guardar en base de datos
       const readingsService = require('./readingsService');
       console.log(`💾 Intentando guardar lectura de agua: ${sensorId}`);
-      const savedId = readingsService.saveWaterReading(sensorId, processedData);
-      if (savedId) {
-        console.log(`✅ Lectura de agua guardada: ID ${savedId}`);
+      const savedReading = readingsService.saveWaterReading(sensorId, processedData);
+      if (savedReading) {
+        console.log(`✅ Lectura de agua guardada: ID ${savedReading}`);
+
+        // 🎮 GAMIFICACIÓN AUTOMÁTICA: Procesar después de guardar lectura
+        this.processGamification(savedReading.userId);
       }
 
       // Detectar fugas
       const leakDetection = waterProcessor.detectLeaks(sensorId);
-      
+
       // Verificar alertas
       alertManager.checkWaterFlow(
         sensorId,
@@ -299,7 +305,7 @@ class MQTTService {
   disconnect() {
     if (this.client) {
       console.log('👋 Desconectando de MQTT broker...');
-      
+
       // Publicar estado offline
       this.publish('wattnbeaber/system/status', {
         status: 'offline',
@@ -309,6 +315,43 @@ class MQTTService {
       this.client.end();
       this.isConnected = false;
       console.log('✅ Desconectado');
+    }
+  }
+
+  /**
+   * 🎮 Procesar gamificación automática para un usuario
+   * Se ejecuta cada vez que llega una nueva lectura
+   */
+  async processGamification(userId) {
+    if (!userId) {
+      console.warn('⚠️  No se pudo procesar gamificación: userId no proporcionado');
+      return;
+    }
+
+    try {
+      const Gamification = require('../models/Gamification');
+
+      console.log(`🎮 Procesando gamificación para usuario ${userId}...`);
+
+      const result = await Gamification.processGamification(userId);
+
+      // Log de resultados importantes
+      if (result.achievements && result.achievements.length > 0) {
+        console.log(`   🏆 ${result.achievements.length} nuevo(s) logro(s) desbloqueado(s)`);
+      }
+
+      if (result.challenges && result.challenges.completed && result.challenges.completed.length > 0) {
+        console.log(`   🎯 ${result.challenges.completed.length} reto(s) completado(s)`);
+      }
+
+      if (result.streak && result.streak.milestone && result.streak.milestone.reached) {
+        console.log(`   🔥 Hito de racha alcanzado: ${result.streak.milestone.days} días`);
+      }
+
+      return result;
+    } catch (error) {
+      console.error('❌ Error al procesar gamificación:', error);
+      // No lanzar error para no interrumpir el flujo de lecturas
     }
   }
 }

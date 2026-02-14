@@ -128,10 +128,51 @@ const deleteNotification = async (req, res) => {
   }
 };
 
+/**
+ * Obtener notificaciones recientes (últimas X horas)
+ */
+const getRecentNotifications = async (req, res) => {
+  try {
+    const { hours = 24 } = req.query;
+
+    const notifications = Notification.getRecent(req.user.id, parseInt(hours));
+    const unreadCount = Notification.countUnread(req.user.id);
+
+    return success(res, {
+      notifications,
+      unread_count: unreadCount,
+      count: notifications.length
+    }, 'Notificaciones recientes obtenidas');
+
+  } catch (err) {
+    console.error('Error al obtener notificaciones recientes:', err);
+    return error(res, 'Error al obtener notificaciones recientes', 500);
+  }
+};
+
+/**
+ * Obtener contador de notificaciones no leídas
+ */
+const getUnreadCount = async (req, res) => {
+  try {
+    const count = Notification.countUnread(req.user.id);
+
+    return success(res, {
+      unread_count: count
+    }, 'Contador obtenido');
+
+  } catch (err) {
+    console.error('Error al obtener contador:', err);
+    return error(res, 'Error al obtener contador', 500);
+  }
+};
+
 module.exports = {
   getNotifications,
   markAsRead,
   markAllAsRead,
   createNotification,
-  deleteNotification
+  deleteNotification,
+  getRecentNotifications,
+  getUnreadCount
 };
