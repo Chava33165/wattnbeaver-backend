@@ -75,7 +75,14 @@ while true; do
             echo ""
             echo "🏆 LOGROS DISPONIBLES EN EL SISTEMA:"
             echo ""
-            query "SELECT icon || ' ' || name as Logro, description as Descripción, points as Puntos, color as Color, category as Categoría FROM achievements ORDER BY points;" | column -t -s '|'
+            # Verificar si existe la columna color
+            has_color=$(query "PRAGMA table_info(achievements);" | grep -c "color" || echo "0")
+
+            if [ "$has_color" -gt 0 ]; then
+                query "SELECT icon || ' ' || name as Logro, description as Descripción, points as Puntos, color as Color, category as Categoría FROM achievements ORDER BY points;" | column -t -s '|'
+            else
+                query "SELECT icon || ' ' || name as Logro, description as Descripción, points as Puntos, category as Categoría FROM achievements ORDER BY points;" | column -t -s '|'
+            fi
             ;;
         8)
             echo ""
@@ -376,8 +383,8 @@ while true; do
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
             echo "   Logros en el sistema: $(query 'SELECT COUNT(*) FROM achievements;')"
             echo "   Logros desbloqueados: $(query 'SELECT COUNT(*) FROM user_achievements WHERE completed=1;')"
-            echo "   Retos activos: $(query 'SELECT COUNT(*) FROM user_challenges WHERE status=\"active\";')"
-            echo "   Retos completados: $(query 'SELECT COUNT(*) FROM user_challenges WHERE status=\"completed\";')"
+            echo "   Retos activos: $(query "SELECT COUNT(*) FROM user_challenges WHERE status='active';")"
+            echo "   Retos completados: $(query "SELECT COUNT(*) FROM user_challenges WHERE status='completed';")"
             echo "   Notificaciones: $(query 'SELECT COUNT(*) FROM notifications;')"
             echo "   Notificaciones no leídas: $(query 'SELECT COUNT(*) FROM notifications WHERE read=0;')"
             echo ""
