@@ -114,3 +114,4 @@ run-simulation-standalone.js
 !backend/ecosystem.config.js
 !.gitignore
 !README.md
+GITHUB_TOKEN_GUIDE.md
