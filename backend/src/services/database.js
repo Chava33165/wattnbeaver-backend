@@ -198,6 +198,7 @@ class DatabaseService {
         name TEXT NOT NULL,
         description TEXT,
         icon TEXT,
+        color TEXT DEFAULT '#4CAF50',
         points INTEGER DEFAULT 0,
         category TEXT,
         requirement TEXT,
@@ -251,6 +252,22 @@ class DatabaseService {
       );
     `);
 
+    // TABLA: notifications
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS notifications (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        type TEXT NOT NULL,
+        title TEXT NOT NULL,
+        message TEXT NOT NULL,
+        data TEXT,
+        icon TEXT,
+        read INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT (datetime('now')),
+        FOREIGN KEY (user_id) REFERENCES users(id)
+      );
+    `);
+
     // ========================================
     // ÍNDICES PARA OPTIMIZACIÓN
     // ========================================
@@ -285,8 +302,14 @@ class DatabaseService {
 
     // Índices para devices
     this.db.exec(`
-      CREATE INDEX IF NOT EXISTS idx_devices_user 
+      CREATE INDEX IF NOT EXISTS idx_devices_user
       ON devices(user_id);
+    `);
+
+    // Índices para notifications
+    this.db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_notifications_user
+      ON notifications(user_id, read, created_at);
     `);
 
     console.log('✅ Estructura de tablas creada');
@@ -311,7 +334,8 @@ class DatabaseService {
             id: 'ach_first_week',
             name: 'Primera Semana',
             description: 'Completa tu primera semana usando WattBeaber',
-            icon: '🎉',
+            icon: '🏆',
+            color: '#FFD700',
             points: 100,
             category: 'milestone',
             requirement: 'days_active:7'
@@ -321,6 +345,7 @@ class DatabaseService {
             name: 'Ahorrador Principiante',
             description: 'Reduce tu consumo 10% en una semana',
             icon: '💰',
+            color: '#4CAF50',
             points: 150,
             category: 'saving',
             requirement: 'reduce_consumption:10'
@@ -330,6 +355,7 @@ class DatabaseService {
             name: 'Ahorrador Experto',
             description: 'Reduce tu consumo 20% en una semana',
             icon: '💎',
+            color: '#2196F3',
             points: 300,
             category: 'saving',
             requirement: 'reduce_consumption:20'
@@ -339,6 +365,7 @@ class DatabaseService {
             name: 'Racha de 7 días',
             description: 'Mantén tu consumo bajo objetivo por 7 días seguidos',
             icon: '🔥',
+            color: '#FF5722',
             points: 200,
             category: 'streak',
             requirement: 'streak_days:7'
@@ -347,7 +374,8 @@ class DatabaseService {
             id: 'ach_streak_30',
             name: 'Racha de 30 días',
             description: 'Mantén tu consumo bajo objetivo por 30 días seguidos',
-            icon: '⭐',
+            icon: '🔥🔥',
+            color: '#9C27B0',
             points: 500,
             category: 'streak',
             requirement: 'streak_days:30'
@@ -357,6 +385,7 @@ class DatabaseService {
             name: 'Sin Fugas',
             description: 'Pasa un mes sin fugas de agua',
             icon: '💧',
+            color: '#00BCD4',
             points: 250,
             category: 'water',
             requirement: 'no_leaks:30'
@@ -364,14 +393,14 @@ class DatabaseService {
         ];
 
         const insertAchievement = this.db.prepare(`
-          INSERT INTO achievements (id, name, description, icon, points, category, requirement)
-          VALUES (?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO achievements (id, name, description, icon, color, points, category, requirement)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         `);
 
         const insertMany = this.db.transaction((achievements) => {
           for (const ach of achievements) {
             insertAchievement.run(
-              ach.id, ach.name, ach.description, ach.icon, 
+              ach.id, ach.name, ach.description, ach.icon, ach.color,
               ach.points, ach.category, ach.requirement
             );
           }
@@ -470,9 +499,10 @@ class DatabaseService {
     const stats = {};
     
     const tables = [
-      'users', 'households', 'devices', 
+      'users', 'households', 'devices',
       'energy_readings', 'water_readings', 'alerts',
-      'achievements', 'challenges', 'user_achievements', 'user_challenges'
+      'achievements', 'challenges', 'user_achievements', 'user_challenges',
+      'notifications'
     ];
 
     tables.forEach(table => {
