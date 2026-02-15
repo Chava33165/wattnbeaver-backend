@@ -2,7 +2,7 @@
 
 ## Objetivo General
 
-Desarrollar un sistema integral compuesto por una aplicación móvil, dispositivos IoT de bajo costo y un servidor local, que permita monitorear, analizar y gestionar en tiempo real el consumo energético e hídrico doméstico, implementando estrategias de gamificación y detección automática de anomalías, con el fin de reducir gastos, optimizar el uso de recursos y fomentar hábitos sostenibles en los hogares mexicanos.
+Desarrollar un sistema integral compuesto por una aplicación móvil, dispositivos IoT de bajo costo y un servidor backend, que permita monitorear, analizar y gestionar en tiempo real el consumo energético e hídrico doméstico, implementando estrategias de gamificación y detección automática de anomalías, con el fin de reducir gastos, optimizar el uso de recursos y fomentar hábitos sostenibles en los hogares mexicanos.
 
 ---
 
