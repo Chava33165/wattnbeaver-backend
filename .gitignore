@@ -115,3 +115,5 @@ run-simulation-standalone.js
 !.gitignore
 !README.md
 GITHUB_TOKEN_GUIDE.md
+*.db
+backend/wattnbeaber.db
