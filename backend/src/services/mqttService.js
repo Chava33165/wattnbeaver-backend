@@ -147,7 +147,7 @@ class MQTTService {
   /**
    * Manejar mensajes de energía
    */
-  handleEnergyMessage(topic, data) {
+  async handleEnergyMessage(topic, data) {
     // Extraer device_id del topic
     const parts = topic.split('/');
     const deviceId = parts[2];
@@ -171,12 +171,9 @@ class MQTTService {
       // ⭐ NUEVO: Guardar en base de datos
       const readingsService = require('./readingsService');
       console.log(`💾 Intentando guardar lectura de energía: ${deviceId}`);
-      const savedReading = readingsService.saveEnergyReading(deviceId, processedData);
-      if (savedReading) {
-        console.log(`✅ Lectura de energía guardada: ID ${savedReading}`);
-
-        // 🎮 GAMIFICACIÓN AUTOMÁTICA: Procesar después de guardar lectura
-        this.processGamification(savedReading.userId);
+      const savedId = await readingsService.saveEnergyReading(deviceId, processedData);
+      if (savedId) {
+        console.log(`✅ Lectura de energía guardada: ID ${savedId}`);
       }
 
       // Verificar alertas
@@ -191,7 +188,7 @@ class MQTTService {
   /**
    * Manejar mensajes de agua
    */
-  handleWaterMessage(topic, data) {
+  async handleWaterMessage(topic, data) {
     // Extraer sensor_id del topic
     const parts = topic.split('/');
     const sensorId = parts[2];
@@ -213,12 +210,9 @@ class MQTTService {
       // ⭐ NUEVO: Guardar en base de datos
       const readingsService = require('./readingsService');
       console.log(`💾 Intentando guardar lectura de agua: ${sensorId}`);
-      const savedReading = readingsService.saveWaterReading(sensorId, processedData);
-      if (savedReading) {
-        console.log(`✅ Lectura de agua guardada: ID ${savedReading}`);
-
-        // 🎮 GAMIFICACIÓN AUTOMÁTICA: Procesar después de guardar lectura
-        this.processGamification(savedReading.userId);
+      const savedId = await readingsService.saveWaterReading(sensorId, processedData);
+      if (savedId) {
+        console.log(`✅ Lectura de agua guardada: ID ${savedId}`);
       }
 
       // Detectar fugas
