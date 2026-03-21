@@ -12,6 +12,7 @@ const simulatorRoutes = require('./api/simulatorRoutes');
 const mqttRoutes = require('./api/mqttRoutes');
 const deviceRoutes = require('./api/deviceRoutes');
 const gamificationRoutes = require('./api/gamificationRoutes');
+const ingestRoutes = require('./api/ingestRoutes');
 
 
 // Importar nuevas rutas de procesamiento
@@ -74,6 +75,9 @@ router.use('/goals', goalRoutes);
 
 // Rutas de hogares
 router.use('/households', householdRoutes);
+
+// Rutas de ingesta (para dispositivos ESP32 vía HTTPS)
+router.use('/ingest', ingestRoutes);
 
 
 module.exports = router;

@@ -17,6 +17,7 @@ class Device extends BaseModel {
     this.device_type = data.device_type;
     this.location = data.location;
     this.status = data.status;
+    this.api_key = data.api_key;
     this.created_at = data.created_at;
     this.updated_at = data.updated_at;
   }
@@ -42,11 +43,12 @@ class Device extends BaseModel {
     }
 
     const id = uuidv4();
+    const apiKey = uuidv4(); // Generar API key única para el dispositivo
     const now = new Date().toISOString();
 
     const stmt = db.prepare(`
-      INSERT INTO devices (id, user_id, household_id, device_id, device_name, device_type, location, status, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO devices (id, user_id, household_id, device_id, device_name, device_type, location, status, api_key, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -58,6 +60,7 @@ class Device extends BaseModel {
       deviceData.device_type,
       deviceData.location ? this.sanitize(deviceData.location) : null,
       'active',
+      apiKey,
       now,
       now
     );
@@ -81,7 +84,17 @@ class Device extends BaseModel {
   static async findByDeviceId(deviceId) {
     const stmt = db.prepare('SELECT * FROM devices WHERE device_id = ?');
     const row = stmt.get(deviceId);
-    
+
+    return row ? new Device(row) : null;
+  }
+
+  /**
+   * Buscar dispositivo por API Key individual
+   */
+  static async findByApiKey(apiKey) {
+    const stmt = db.prepare('SELECT * FROM devices WHERE api_key = ?');
+    const row = stmt.get(apiKey);
+
     return row ? new Device(row) : null;
   }
 
@@ -189,17 +202,17 @@ class Device extends BaseModel {
    */
   static async getStats(userId) {
     const stmt = db.prepare(`
-      SELECT 
+      SELECT
         device_type,
         COUNT(*) as count,
         SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active
-      FROM devices 
+      FROM devices
       WHERE user_id = ?
       GROUP BY device_type
     `);
-    
+
     const rows = stmt.all(userId);
-    
+
     const stats = {
       total: 0,
       energy: 0,
@@ -217,6 +230,25 @@ class Device extends BaseModel {
   }
 
   /**
+   * Rotar API Key de un dispositivo
+   * Útil cuando una clave se compromete o se pierde
+   */
+  static async rotateApiKey(id) {
+    const newApiKey = uuidv4();
+    const now = new Date().toISOString();
+
+    const stmt = db.prepare(`
+      UPDATE devices
+      SET api_key = ?, updated_at = ?
+      WHERE id = ?
+    `);
+
+    stmt.run(newApiKey, now, id);
+
+    return this.findById(id);
+  }
+
+  /**
    * Convertir a JSON
    */
   toJSON() {
@@ -229,6 +261,7 @@ class Device extends BaseModel {
       device_type: this.device_type,
       location: this.location,
       status: this.status,
+      api_key: this.api_key, // Crítico para aprovisionamiento WiFiManager
       created_at: this.created_at,
       updated_at: this.updated_at
     };

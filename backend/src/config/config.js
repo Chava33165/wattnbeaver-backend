@@ -44,5 +44,9 @@ module.exports = {
   limits: {
     maxDevices: parseInt(process.env.MAX_DEVICES, 10) || 50,
     maxRequestsPerMinute: parseInt(process.env.MAX_REQUESTS_PER_MINUTE, 10) || 100
-  }
+  },
+
+  // Device API (para autenticación de ESP32 vía HTTPS)
+  deviceApiKey: process.env.DEVICE_API_KEY || 'change-this-device-key',
+  deviceRateLimit: parseInt(process.env.DEVICE_RATE_LIMIT, 10) || 60
 };
