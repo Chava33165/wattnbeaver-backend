@@ -170,11 +170,47 @@ const getDeviceStats = async (req, res) => {
   }
 };
 
+/**
+ * Rotar API Key de un dispositivo
+ */
+const rotateApiKey = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Buscar dispositivo
+    const device = await Device.findById(id);
+
+    if (!device) {
+      return error(res, 'Dispositivo no encontrado', 404);
+    }
+
+    // Verificar permisos
+    if (device.user_id !== req.user.id && req.user.role !== 'admin') {
+      return error(res, 'No tienes permiso para modificar este dispositivo', 403);
+    }
+
+    // Rotar la API key
+    const updatedDevice = await Device.rotateApiKey(id);
+
+    console.log(`🔄 API Key rotada para dispositivo: ${device.device_id}`);
+
+    return success(res, {
+      device: updatedDevice.toJSON(),
+      warning: 'API Key rotada exitosamente. Actualiza la configuración de tu ESP32 con la nueva clave.'
+    }, 'API Key rotada exitosamente');
+
+  } catch (err) {
+    console.error('Error al rotar API key:', err);
+    return error(res, 'Error al rotar API key', 500);
+  }
+};
+
 module.exports = {
   linkDevice,
   getMyDevices,
   getDeviceById,
   updateDevice,
   unlinkDevice,
-  getDeviceStats
+  getDeviceStats,
+  rotateApiKey
 };

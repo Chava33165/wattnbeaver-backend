@@ -9,10 +9,10 @@ Desarrollar un sistema integral compuesto por una aplicación móvil, dispositiv
 ## Objetivos Específicos
 
 ### 1. Hardware y Sensores
-Contar con un conjunto de componentes de hardware y sensores de instrumentación adecuados, con óptima relación costo-beneficio, que permitan la medición precisa del flujo de agua y la corriente eléctrica en entornos domésticos.
+Implementar un conjunto de componentes de hardware y sensores de instrumentación adecuados, con óptima relación costo-beneficio, que permitan la medición precisa del flujo de agua y la corriente eléctrica en entornos domésticos.
 
 ### 2. Arquitectura y Base de Datos
-Disponer de una arquitectura de sistema y un esquema de base de datos que garanticen la recolección, transmisión y almacenamiento seguro de la información generada por los dispositivos de manera eficiente y escalable.
+Establecer una arquitectura de sistema y un esquema de base de datos que garanticen la recolección, transmisión y almacenamiento seguro de la información generada por los dispositivos de manera eficiente y escalable.
 
 ### 3. Aplicación Móvil
 Contar con una aplicación móvil con interfaz intuitiva que permita a los usuarios visualizar métricas de consumo, gestionar su perfil de gamificación, controlar el sistema y recibir notificaciones en tiempo real.

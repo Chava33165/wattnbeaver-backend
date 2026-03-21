@@ -7,7 +7,8 @@ const {
   getDeviceById,
   updateDevice,
   unlinkDevice,
-  getDeviceStats
+  getDeviceStats,
+  rotateApiKey
 } = require('../../controllers/devices/deviceController');
 const { authMiddleware } = require('../../middlewares/auth');
 
@@ -117,5 +118,56 @@ router.put('/:id', authMiddleware, updateDevice);
  *       - bearerAuth: []
  */
 router.delete('/:id', authMiddleware, unlinkDevice);
+
+/**
+ * @swagger
+ * /api/v1/devices/{id}/rotate-key:
+ *   post:
+ *     summary: Rotar API Key del dispositivo
+ *     description: Genera una nueva API Key para el dispositivo. La clave anterior quedará inválida.
+ *     tags: [Devices]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID del dispositivo
+ *     responses:
+ *       200:
+ *         description: API Key rotada exitosamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "API Key rotada exitosamente"
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     device:
+ *                       type: object
+ *                       properties:
+ *                         id:
+ *                           type: string
+ *                         api_key:
+ *                           type: string
+ *                           description: Nueva API Key generada
+ *                     warning:
+ *                       type: string
+ *                       example: "API Key rotada exitosamente. Actualiza la configuración de tu ESP32 con la nueva clave."
+ *       403:
+ *         description: Sin permiso para modificar el dispositivo
+ *       404:
+ *         description: Dispositivo no encontrado
+ */
+router.post('/:id/rotate-key', authMiddleware, rotateApiKey);
 
 module.exports = router;
