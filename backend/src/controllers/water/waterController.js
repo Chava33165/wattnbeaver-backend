@@ -133,11 +133,13 @@ const getConsumptionHistory = async (req, res) => {
     if (period === 'week') timeFilter = "datetime('now', '-7 days')";
     if (period === 'month') timeFilter = "datetime('now', '-30 days')";
 
+    // NOTA: total es ACUMULATIVO, por eso usamos MAX - MIN
     const history = db.prepare(`
-      SELECT 
+      SELECT
         strftime('%Y-%m-%dT%H:00:00', timestamp) as hour,
         AVG(flow) as avg_flow,
-        SUM(total) as total_volume
+        MAX(total) - MIN(total) as total_volume,
+        COUNT(*) as readings_count
       FROM water_readings
       WHERE device_id IN (${placeholders})
         AND timestamp > ${timeFilter}
@@ -152,9 +154,102 @@ const getConsumptionHistory = async (req, res) => {
   }
 };
 
+/**
+ * Obtener estadísticas semanales de consumo de agua (por día)
+ * Filtra por usuario logueado
+ */
+const getWeeklyStatistics = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { startDate, endDate } = req.query;
+
+    // Validar fechas
+    if (!startDate || !endDate) {
+      return error(res, 'Se requieren startDate y endDate (formato: YYYY-MM-DD)', 400);
+    }
+
+    // Obtener dispositivos del usuario
+    const userDevices = db.prepare(`
+      SELECT device_id FROM devices
+      WHERE user_id = ? AND device_type = 'water'
+    `).all(userId);
+
+    if (userDevices.length === 0) {
+      return success(res, { data: [], period: { startDate, endDate }, totalDays: 0 }, 'Sin dispositivos de agua');
+    }
+
+    const deviceIds = userDevices.map(d => d.device_id);
+    const placeholders = deviceIds.map(() => '?').join(',');
+
+    // Obtener estadísticas agrupadas por día
+    // NOTA: total es ACUMULATIVO, por eso usamos MAX - MIN
+    const statistics = db.prepare(`
+      SELECT
+        date(w.timestamp) as fecha,
+        CASE cast(strftime('%w', w.timestamp) as integer)
+          WHEN 0 THEN 'Domingo'
+          WHEN 1 THEN 'Lunes'
+          WHEN 2 THEN 'Martes'
+          WHEN 3 THEN 'Miércoles'
+          WHEN 4 THEN 'Jueves'
+          WHEN 5 THEN 'Viernes'
+          WHEN 6 THEN 'Sábado'
+        END as dia_semana,
+        COUNT(*) as num_lecturas,
+        ROUND(AVG(w.flow), 3) as flujo_promedio_lmin,
+        ROUND(MAX(w.flow), 3) as flujo_maximo_lmin,
+        ROUND(MIN(w.total), 3) as litros_inicio,
+        ROUND(MAX(w.total), 3) as litros_fin,
+        ROUND(MAX(w.total) - MIN(w.total), 3) as consumo_dia_litros
+      FROM water_readings w
+      WHERE w.device_id IN (${placeholders})
+        AND date(w.timestamp) >= date(?)
+        AND date(w.timestamp) <= date(?)
+      GROUP BY date(w.timestamp)
+      ORDER BY fecha ASC
+    `).all(...deviceIds, startDate, endDate);
+
+    // Validaciones y warnings
+    const warnings = [];
+    statistics.forEach(stat => {
+      // Warning si el consumo diario es muy alto (>500L)
+      if (stat.consumo_dia_litros > 500) {
+        warnings.push({
+          fecha: stat.fecha,
+          tipo: 'consumo_alto',
+          mensaje: `Consumo de ${stat.consumo_dia_litros}L parece muy alto. Verificar posible fuga.`,
+          valor: stat.consumo_dia_litros
+        });
+      }
+
+      // Warning si el flujo es anormalmente alto (>30 L/min)
+      if (stat.flujo_maximo_lmin > 30) {
+        warnings.push({
+          fecha: stat.fecha,
+          tipo: 'flujo_alto',
+          mensaje: `Flujo máximo de ${stat.flujo_maximo_lmin} L/min es muy alto. Verificar sensor YF-201.`,
+          valor: stat.flujo_maximo_lmin
+        });
+      }
+    });
+
+    return success(res, {
+      data: statistics,
+      period: { startDate, endDate },
+      totalDays: statistics.length,
+      warnings: warnings.length > 0 ? warnings : undefined
+    }, 'Estadísticas semanales obtenidas exitosamente');
+
+  } catch (err) {
+    console.error('Error al obtener estadísticas semanales de agua:', err);
+    return error(res, 'Error al obtener estadísticas', 500);
+  }
+};
+
 module.exports = {
   getAllSensors,
   getSensorById,
   getTotalConsumption,
-  getConsumptionHistory
+  getConsumptionHistory,
+  getWeeklyStatistics
 };
