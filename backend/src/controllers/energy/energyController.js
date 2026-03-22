@@ -137,11 +137,14 @@ const getConsumptionHistory = async (req, res) => {
     if (period === 'month') timeFilter = "datetime('now', '-30 days')";
 
     // Obtener historial
+    // NOTA: energy es un valor ACUMULATIVO (como odómetro)
+    // Por lo tanto, el consumo se calcula como MAX - MIN, NO como SUM
     const history = db.prepare(`
-      SELECT 
+      SELECT
         strftime('%Y-%m-%dT%H:00:00', timestamp) as hour,
         AVG(power) as avg_power,
-        SUM(energy) as total_energy
+        MAX(energy) - MIN(energy) as total_energy,
+        COUNT(*) as readings_count
       FROM energy_readings
       WHERE device_id IN (${placeholders})
         AND timestamp > ${timeFilter}
@@ -153,6 +156,140 @@ const getConsumptionHistory = async (req, res) => {
   } catch (err) {
     console.error('Error al obtener historial:', err);
     return error(res, 'Error al obtener historial', 500);
+  }
+};
+
+/**
+ * Obtener estadísticas semanales de consumo de energía (por día)
+ * Filtra por usuario logueado
+ */
+const getWeeklyStatistics = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { startDate, endDate } = req.query;
+
+    // Validar fechas
+    if (!startDate || !endDate) {
+      return error(res, 'Se requieren startDate y endDate (formato: YYYY-MM-DD)', 400);
+    }
+
+    // Obtener dispositivos del usuario
+    const userDevices = db.prepare(`
+      SELECT device_id FROM devices
+      WHERE user_id = ? AND device_type = 'energy'
+    `).all(userId);
+
+    if (userDevices.length === 0) {
+      return success(res, { data: [], period: { startDate, endDate }, totalDays: 0 }, 'Sin dispositivos de energía');
+    }
+
+    const deviceIds = userDevices.map(d => d.device_id);
+    const placeholders = deviceIds.map(() => '?').join(',');
+
+    // Obtener estadísticas agrupadas por día
+    // NOTA: energy es ACUMULATIVO, por eso usamos MAX - MIN
+    // NOTA 2: También calculamos energía desde potencia porque el campo energy del Sonoff suele tener errores
+    const statistics = db.prepare(`
+      SELECT
+        date(e.timestamp) as fecha,
+        CASE cast(strftime('%w', e.timestamp) as integer)
+          WHEN 0 THEN 'Domingo'
+          WHEN 1 THEN 'Lunes'
+          WHEN 2 THEN 'Martes'
+          WHEN 3 THEN 'Miércoles'
+          WHEN 4 THEN 'Jueves'
+          WHEN 5 THEN 'Viernes'
+          WHEN 6 THEN 'Sábado'
+        END as dia_semana,
+        COUNT(*) as num_lecturas,
+        ROUND(AVG(e.power), 2) as potencia_promedio_w,
+        ROUND(MAX(e.power), 2) as potencia_maxima_w,
+        ROUND(AVG(e.voltage), 1) as voltaje_promedio_v,
+        ROUND(AVG(e.current), 3) as corriente_promedio_a,
+        ROUND(MIN(e.energy), 3) as energia_inicio_kwh,
+        ROUND(MAX(e.energy), 3) as energia_fin_kwh,
+        ROUND(MAX(e.energy) - MIN(e.energy), 3) as consumo_sensor_kwh,
+        ROUND((julianday(MAX(e.timestamp)) - julianday(MIN(e.timestamp))) * 24, 2) as horas_transcurridas
+      FROM energy_readings e
+      WHERE e.device_id IN (${placeholders})
+        AND date(e.timestamp) >= date(?)
+        AND date(e.timestamp) <= date(?)
+      GROUP BY date(e.timestamp)
+      ORDER BY fecha ASC
+    `).all(...deviceIds, startDate, endDate);
+
+    // Calcular energía desde potencia (más preciso)
+    const statisticsWithCalculated = statistics.map(stat => {
+      // Energía = Potencia × Tiempo
+      // kWh = (Watts × Horas) / 1000
+      const consumo_calculado_kwh = (stat.potencia_promedio_w * stat.horas_transcurridas) / 1000;
+
+      return {
+        ...stat,
+        consumo_calculado_kwh: parseFloat(consumo_calculado_kwh.toFixed(4)),
+        // Usar el calculado como valor principal (más confiable)
+        consumo_dia_kwh: parseFloat(consumo_calculado_kwh.toFixed(4))
+      };
+    });
+
+    // Validaciones y warnings
+    const warnings = [];
+    statisticsWithCalculated.forEach(stat => {
+      // Warning si el consumo diario es anormalmente alto
+      if (stat.consumo_dia_kwh > 10) {
+        warnings.push({
+          fecha: stat.fecha,
+          tipo: 'consumo_alto',
+          mensaje: `Consumo de ${stat.consumo_dia_kwh} kWh parece anormalmente alto para un dispositivo doméstico.`,
+          valor: stat.consumo_dia_kwh
+        });
+      }
+
+      // Warning si el voltaje está fuera de rango (127V ±15%)
+      if (stat.voltaje_promedio_v < 90 || stat.voltaje_promedio_v > 145) {
+        warnings.push({
+          fecha: stat.fecha,
+          tipo: 'voltaje_anormal',
+          mensaje: `Voltaje de ${stat.voltaje_promedio_v}V fuera de rango normal (90-145V para México)`,
+          valor: stat.voltaje_promedio_v
+        });
+      }
+
+      // Warning si la potencia promedio es muy baja
+      if (stat.potencia_promedio_w > 0 && stat.potencia_promedio_w < 50) {
+        warnings.push({
+          fecha: stat.fecha,
+          tipo: 'potencia_baja',
+          mensaje: `Potencia de ${stat.potencia_promedio_w}W muy baja. Dispositivo probablemente en standby o apagado.`,
+          valor: stat.potencia_promedio_w
+        });
+      }
+
+      // Warning si hay gran discrepancia entre sensor y cálculo
+      const discrepancia = Math.abs(stat.consumo_sensor_kwh - stat.consumo_calculado_kwh);
+      if (discrepancia > 1) {
+        warnings.push({
+          fecha: stat.fecha,
+          tipo: 'sensor_descalibrado',
+          mensaje: `Discrepancia de ${discrepancia.toFixed(2)} kWh entre sensor (${stat.consumo_sensor_kwh}) y cálculo (${stat.consumo_calculado_kwh}). El sensor Sonoff POW puede estar descalibrado.`,
+          sensor_kwh: stat.consumo_sensor_kwh,
+          calculado_kwh: stat.consumo_calculado_kwh,
+          diferencia: discrepancia
+        });
+      }
+    });
+
+    return success(res, {
+      data: statisticsWithCalculated,
+      period: { startDate, endDate },
+      totalDays: statisticsWithCalculated.length,
+      warnings: warnings.length > 0 ? warnings : undefined,
+      nota: 'consumo_dia_kwh usa el cálculo basado en potencia×tiempo (más preciso). consumo_sensor_kwh es el valor directo del sensor.'
+    }, 'Estadísticas semanales obtenidas exitosamente');
+
+  } catch (err) {
+    console.error('Error al obtener estadísticas semanales:', err);
+    return error(res, 'Error al obtener estadísticas', 500);
   }
 };
 
@@ -203,5 +340,6 @@ module.exports = {
   getDeviceById,
   getTotalConsumption,
   getConsumptionHistory,
+  getWeeklyStatistics,
   controlDevice
 };

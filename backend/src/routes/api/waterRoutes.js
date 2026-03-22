@@ -5,7 +5,8 @@ const {
   getAllSensors,
   getSensorById,
   getTotalConsumption,
-  getConsumptionHistory
+  getConsumptionHistory,
+  getWeeklyStatistics
 } = require('../../controllers/water/waterController');
 const { authMiddleware } = require('../../middlewares/auth');
 
@@ -52,5 +53,34 @@ router.get('/total', authMiddleware, getTotalConsumption);
  *       - bearerAuth: []
  */
 router.get('/history', authMiddleware, getConsumptionHistory);
+
+/**
+ * @swagger
+ * /api/v1/water/statistics/weekly:
+ *   get:
+ *     summary: Obtener estadísticas semanales de consumo de agua
+ *     tags: [Water]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: startDate
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: date
+ *         example: "2026-03-16"
+ *       - in: query
+ *         name: endDate
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: date
+ *         example: "2026-03-22"
+ *     responses:
+ *       200:
+ *         description: Estadísticas semanales con validaciones
+ */
+router.get('/statistics/weekly', authMiddleware, getWeeklyStatistics);
 
 module.exports = router;
