@@ -72,13 +72,12 @@ const getTotalConsumption = async (req, res) => {
 
     const deviceIds = userDevices.map(d => d.device_id);
 
-    // 2. Obtener últimas lecturas de esos dispositivos
+    // 2. Obtener últimas lecturas de esos dispositivos (últimos 5 min)
     const placeholders = deviceIds.map(() => '?').join(',');
     const latestReadings = db.prepare(`
       SELECT
         device_id,
         power,
-        energy,
         timestamp
       FROM energy_readings
       WHERE device_id IN (${placeholders})
@@ -96,7 +95,24 @@ const getTotalConsumption = async (req, res) => {
 
     const readings = Object.values(uniqueDevices);
     const totalPower = readings.reduce((sum, r) => sum + (r.power || 0), 0);
-    const totalEnergy = readings.reduce((sum, r) => sum + (r.energy || 0), 0);
+
+    // 4. Calcular energía total del día usando AVG(power) × tiempo
+    const energyToday = db.prepare(`
+      SELECT
+        SUM(avg_power * hours_elapsed) / 1000.0 as total_energy_kwh
+      FROM (
+        SELECT
+          device_id,
+          AVG(power) as avg_power,
+          (julianday(MAX(timestamp)) - julianday(MIN(timestamp))) * 24 as hours_elapsed
+        FROM energy_readings
+        WHERE device_id IN (${placeholders})
+          AND date(timestamp) = date('now')
+        GROUP BY device_id
+      )
+    `).get(...deviceIds);
+
+    const totalEnergy = energyToday?.total_energy_kwh || 0;
 
     return success(res, {
       totalPower: totalPower.toFixed(2),
@@ -137,13 +153,13 @@ const getConsumptionHistory = async (req, res) => {
     if (period === 'month') timeFilter = "datetime('now', '-30 days')";
 
     // Obtener historial
-    // NOTA: energy es un valor ACUMULATIVO (como odómetro)
-    // Por lo tanto, el consumo se calcula como MAX - MIN, NO como SUM
+    // NOTA: Calculamos energía usando AVG(power) × tiempo en vez del campo energy del sensor
+    // Cada bucket es de 1 hora, por eso multiplicamos por 1.0 horas
     const history = db.prepare(`
       SELECT
         strftime('%Y-%m-%dT%H:00:00', timestamp) as hour,
         AVG(power) as avg_power,
-        MAX(energy) - MIN(energy) as total_energy,
+        AVG(power) * 1.0 / 1000.0 as total_energy,
         COUNT(*) as readings_count
       FROM energy_readings
       WHERE device_id IN (${placeholders})
