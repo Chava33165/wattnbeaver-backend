@@ -30,8 +30,8 @@ function validateEnergyData(data) {
     errors.push('power debe ser mayor o igual a 0');
   }
 
-  if (data.voltage !== undefined && (data.voltage < 100 || data.voltage > 250)) {
-    errors.push('voltage debe estar entre 100V y 250V');
+  if (data.voltage !== undefined && data.voltage !== 0 && (data.voltage < 90 || data.voltage > 250)) {
+    errors.push('voltage debe estar entre 90V y 250V');
   }
 
   if (data.current !== undefined && data.current < 0) {
@@ -97,7 +97,9 @@ const ingestWater = async (req, res) => {
     };
 
     // Guardar lectura usando el servicio existente
-    const result = await readingsService.saveWaterReading(device_id, readingData);
+    // Usar device_id del dispositivo autenticado si existe (más confiable que el del body)
+    const effectiveDeviceId = req.device ? req.device.device_id : device_id;
+    const result = await readingsService.saveWaterReading(effectiveDeviceId, readingData);
 
     if (result === null) {
       return error(res, 'Error al guardar la lectura', 500);
@@ -127,21 +129,29 @@ const ingestEnergy = async (req, res) => {
   try {
     const { device_id, power, voltage, current, energy, timestamp } = req.body;
 
+    console.log(`🔍 [ingestEnergy] Recibido: device_id=${device_id}, power=${power}, voltage=${voltage}, current=${current}, energy=${energy}`);
+
     // Validar campos requeridos
     if (!device_id) {
+      console.log(`❌ [ingestEnergy] Rechazado: device_id faltante`);
       return error(res, 'device_id es requerido', 400);
     }
 
     // Validar que al menos un campo de datos esté presente
     if (power === undefined && voltage === undefined && current === undefined && energy === undefined) {
+      console.log(`❌ [ingestEnergy] Rechazado: sin campos de medición`);
       return error(res, 'Debe proporcionar al menos un campo de medición (power, voltage, current, energy)', 400);
     }
 
     // Validar rangos de datos
     const validationErrors = validateEnergyData({ power, voltage, current, energy });
     if (validationErrors.length > 0) {
+      console.log(`❌ [ingestEnergy] Rechazado: validación fallida - ${validationErrors.join(', ')}`);
       return error(res, `Datos inválidos: ${validationErrors.join(', ')}`, 400);
     }
+
+    console.log(`✅ [ingestEnergy] Validaciones pasadas, buscando dispositivo...`);
+
 
     // Si se autenticó con clave individual, el dispositivo ya está validado
     // Si se usó clave global, necesitamos validar que el device_id exista
@@ -173,9 +183,14 @@ const ingestEnergy = async (req, res) => {
     };
 
     // Guardar lectura usando el servicio existente
-    const result = await readingsService.saveEnergyReading(device_id, readingData);
+    // Usar device_id del dispositivo autenticado si existe (más confiable que el del body)
+    const effectiveDeviceId = req.device ? req.device.device_id : device_id;
+    console.log(`💾 [ingestEnergy] Guardando lectura para device_id=${effectiveDeviceId}`);
+
+    const result = await readingsService.saveEnergyReading(effectiveDeviceId, readingData);
 
     if (result === null) {
+      console.log(`❌ [ingestEnergy] Error: saveEnergyReading devolvió null`);
       return error(res, 'Error al guardar la lectura', 500);
     }
 

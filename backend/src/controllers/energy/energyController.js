@@ -75,14 +75,14 @@ const getTotalConsumption = async (req, res) => {
     // 2. Obtener últimas lecturas de esos dispositivos
     const placeholders = deviceIds.map(() => '?').join(',');
     const latestReadings = db.prepare(`
-      SELECT 
+      SELECT
         device_id,
         power,
         energy,
         timestamp
       FROM energy_readings
       WHERE device_id IN (${placeholders})
-        AND timestamp > datetime('now', '-5 minutes')
+        AND datetime(timestamp) > datetime('now', '-5 minutes')
       ORDER BY timestamp DESC
     `).all(...deviceIds);
 
