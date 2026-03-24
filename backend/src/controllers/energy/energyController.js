@@ -153,14 +153,18 @@ const getConsumptionHistory = async (req, res) => {
     if (period === 'month') timeFilter = "datetime('now', '-30 days')";
 
     // Obtener historial
-    // NOTA: Calculamos energía usando AVG(power) × tiempo en vez del campo energy del sensor
-    // Cada bucket es de 1 hora, por eso multiplicamos por 1.0 horas
+    // NOTA: Calculamos energía usando AVG(power) × tiempo_real en vez del campo energy del sensor
+    // Calculamos el tiempo real transcurrido entre MIN y MAX timestamp de cada bucket
+    // Energía (kWh) = Potencia promedio (W) × Horas transcurridas / 1000
     const history = db.prepare(`
       SELECT
         strftime('%Y-%m-%dT%H:00:00', timestamp) as hour,
-        AVG(power) as avg_power,
-        AVG(power) * 1.0 / 1000.0 as total_energy,
-        COUNT(*) as readings_count
+        ROUND(AVG(power), 2) as avg_power,
+        ROUND((julianday(MAX(timestamp)) - julianday(MIN(timestamp))) * 24, 4) as hours_elapsed,
+        ROUND((AVG(power) * (julianday(MAX(timestamp)) - julianday(MIN(timestamp))) * 24) / 1000.0, 6) as total_energy,
+        COUNT(*) as readings_count,
+        datetime(MIN(timestamp), 'localtime') as first_reading,
+        datetime(MAX(timestamp), 'localtime') as last_reading
       FROM energy_readings
       WHERE device_id IN (${placeholders})
         AND timestamp > ${timeFilter}

@@ -71,7 +71,7 @@ const getTotalConsumption = async (req, res) => {
 
     const deviceIds = userDevices.map(d => d.device_id);
 
-    // 2. Obtener últimas lecturas
+    // 2. Obtener últimas lecturas (para flow actual)
     const placeholders = deviceIds.map(() => '?').join(',');
     const latestReadings = db.prepare(`
       SELECT
@@ -85,7 +85,7 @@ const getTotalConsumption = async (req, res) => {
       ORDER BY timestamp DESC
     `).all(...deviceIds);
 
-    // 3. Calcular totales
+    // 3. Calcular flow actual (últimas lecturas)
     const uniqueDevices = {};
     latestReadings.forEach(reading => {
       if (!uniqueDevices[reading.device_id]) {
@@ -95,7 +95,23 @@ const getTotalConsumption = async (req, res) => {
 
     const readings = Object.values(uniqueDevices);
     const totalFlow = readings.reduce((sum, r) => sum + (r.flow || 0), 0);
-    const totalVolume = readings.reduce((sum, r) => sum + (r.total || 0), 0);
+
+    // 4. Calcular consumo del día (MAX - MIN de cada sensor)
+    const volumeToday = db.prepare(`
+      SELECT
+        COALESCE(SUM(daily_consumption), 0) as total_volume
+      FROM (
+        SELECT
+          device_id,
+          MAX(total) - MIN(total) as daily_consumption
+        FROM water_readings
+        WHERE device_id IN (${placeholders})
+          AND date(timestamp) = date('now')
+        GROUP BY device_id
+      )
+    `).get(...deviceIds);
+
+    const totalVolume = volumeToday?.total_volume || 0;
 
     return success(res, {
       totalFlow: totalFlow.toFixed(2),
