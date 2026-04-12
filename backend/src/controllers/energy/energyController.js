@@ -156,9 +156,10 @@ const getConsumptionHistory = async (req, res) => {
     // NOTA: Calculamos energía usando AVG(power) × tiempo_real en vez del campo energy del sensor
     // Calculamos el tiempo real transcurrido entre MIN y MAX timestamp de cada bucket
     // Energía (kWh) = Potencia promedio (W) × Horas transcurridas / 1000
+    // Agrupamos por HORA LOCAL (no UTC) para que la app muestre la hora correcta del usuario
     const history = db.prepare(`
       SELECT
-        strftime('%Y-%m-%dT%H:00:00', timestamp) as hour,
+        strftime('%Y-%m-%dT%H:00:00', timestamp, 'localtime') as hour,
         ROUND(AVG(power), 2) as avg_power,
         ROUND((julianday(MAX(timestamp)) - julianday(MIN(timestamp))) * 24, 4) as hours_elapsed,
         ROUND((AVG(power) * (julianday(MAX(timestamp)) - julianday(MIN(timestamp))) * 24) / 1000.0, 6) as total_energy,
@@ -168,7 +169,7 @@ const getConsumptionHistory = async (req, res) => {
       FROM energy_readings
       WHERE device_id IN (${placeholders})
         AND timestamp > ${timeFilter}
-      GROUP BY hour
+      GROUP BY strftime('%Y-%m-%d %H', timestamp, 'localtime')
       ORDER BY hour ASC
     `).all(...deviceIds);
 
