@@ -262,10 +262,89 @@ const getWeeklyStatistics = async (req, res) => {
   }
 };
 
+/**
+ * Obtener lecturas recientes de un sensor de agua
+ * GET /api/v1/water/sensors/:id/readings?limit=20
+ */
+const getSensorReadings = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { id } = req.params;
+    const limit = Math.min(parseInt(req.query.limit) || 20, 200);
+
+    const sensor = db.prepare(`
+      SELECT * FROM devices
+      WHERE user_id = ? AND device_id = ? AND device_type = 'water'
+    `).get(userId, id);
+
+    if (!sensor) {
+      return error(res, 'Sensor no encontrado', 404);
+    }
+
+    const readings = db.prepare(`
+      SELECT flow, total, timestamp
+      FROM water_readings
+      WHERE device_id = ?
+      ORDER BY timestamp DESC
+      LIMIT ?
+    `).all(id, limit);
+
+    return success(res, {
+      sensor_id: id,
+      readings,
+      total: readings.length
+    }, 'Lecturas obtenidas exitosamente');
+  } catch (err) {
+    console.error('Error al obtener lecturas de agua:', err);
+    return error(res, 'Error al obtener lecturas', 500);
+  }
+};
+
+/**
+ * Estadísticas del día para un sensor de agua
+ * GET /api/v1/water/sensors/:id/stats/today
+ */
+const getSensorStatsToday = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { id } = req.params;
+
+    const sensor = db.prepare(`
+      SELECT * FROM devices
+      WHERE user_id = ? AND device_id = ? AND device_type = 'water'
+    `).get(userId, id);
+
+    if (!sensor) {
+      return error(res, 'Sensor no encontrado', 404);
+    }
+
+    const stats = db.prepare(`
+      SELECT
+        ROUND(AVG(flow), 3)                      as avg_flow_lmin,
+        ROUND(MAX(flow), 3)                      as max_flow_lmin,
+        ROUND(MAX(total) - MIN(total), 3)        as volume_liters,
+        COUNT(*)                                 as readings_count
+      FROM water_readings
+      WHERE device_id = ?
+        AND date(timestamp) = date('now')
+    `).get(id);
+
+    return success(res, {
+      sensor_id: id,
+      today: stats
+    }, 'Estadísticas del día obtenidas');
+  } catch (err) {
+    console.error('Error al obtener estadísticas del día de agua:', err);
+    return error(res, 'Error al obtener estadísticas', 500);
+  }
+};
+
 module.exports = {
   getAllSensors,
   getSensorById,
   getTotalConsumption,
   getConsumptionHistory,
-  getWeeklyStatistics
+  getWeeklyStatistics,
+  getSensorReadings,
+  getSensorStatsToday
 };

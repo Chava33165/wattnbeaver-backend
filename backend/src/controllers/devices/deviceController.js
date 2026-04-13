@@ -1,6 +1,7 @@
 // src/controllers/devices/deviceController.js
 const Device = require('../../models/Device');
 const { success, error } = require('../../utils/response');
+const db = require('../../services/database');
 
 /**
  * Vincular nuevo dispositivo
@@ -48,8 +49,35 @@ const getMyDevices = async (req, res) => {
     const devices = await Device.findByUserId(req.user.id, type);
     const stats = await Device.getStats(req.user.id);
 
+    const devicesWithReadings = devices.map(d => {
+      const json = d.toJSON();
+      let current_reading = null;
+
+      if (d.device_type === 'energy') {
+        const row = db.prepare(`
+          SELECT power, voltage, current, energy, timestamp
+          FROM energy_readings
+          WHERE device_id = ?
+          ORDER BY timestamp DESC
+          LIMIT 1
+        `).get(d.device_id);
+        current_reading = row || null;
+      } else if (d.device_type === 'water') {
+        const row = db.prepare(`
+          SELECT flow, total, timestamp
+          FROM water_readings
+          WHERE device_id = ?
+          ORDER BY timestamp DESC
+          LIMIT 1
+        `).get(d.device_id);
+        current_reading = row || null;
+      }
+
+      return { ...json, current_reading };
+    });
+
     return success(res, {
-      devices: devices.map(d => d.toJSON()),
+      devices: devicesWithReadings,
       stats,
       total: devices.length
     }, 'Dispositivos obtenidos');

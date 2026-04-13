@@ -7,7 +7,9 @@ const {
   getTotalConsumption,
   getConsumptionHistory,
   getWeeklyStatistics,
-  controlDevice
+  controlDevice,
+  getDeviceReadings,
+  getDeviceStatsToday
 } = require('../../controllers/energy/energyController');
 const { authMiddleware } = require('../../middlewares/auth');
 
@@ -97,5 +99,46 @@ router.get('/statistics/weekly', authMiddleware, getWeeklyStatistics);
  *       - bearerAuth: []
  */
 router.post('/devices/:id/control', authMiddleware, controlDevice);
+
+/**
+ * @swagger
+ * /api/v1/energy/devices/{id}/readings:
+ *   get:
+ *     summary: Obtener lecturas recientes de un dispositivo de energía
+ *     tags: [Energy]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         example: "sonoff_01"
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ */
+router.get('/devices/:id/readings', authMiddleware, getDeviceReadings);
+
+/**
+ * @swagger
+ * /api/v1/energy/devices/{id}/stats/today:
+ *   get:
+ *     summary: Estadísticas del día para un dispositivo de energía
+ *     tags: [Energy]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         example: "sonoff_01"
+ */
+router.get('/devices/:id/stats/today', authMiddleware, getDeviceStatsToday);
 
 module.exports = router;

@@ -356,11 +356,93 @@ const controlDevice = async (req, res) => {
   }
 };
 
+/**
+ * Obtener lecturas recientes de un dispositivo de energía
+ * GET /api/v1/energy/devices/:id/readings?limit=20
+ */
+const getDeviceReadings = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { id } = req.params;
+    const limit = Math.min(parseInt(req.query.limit) || 20, 200);
+
+    const device = db.prepare(`
+      SELECT * FROM devices
+      WHERE user_id = ? AND device_id = ? AND device_type = 'energy'
+    `).get(userId, id);
+
+    if (!device) {
+      return error(res, 'Dispositivo no encontrado', 404);
+    }
+
+    const readings = db.prepare(`
+      SELECT power, voltage, current, energy, timestamp
+      FROM energy_readings
+      WHERE device_id = ?
+      ORDER BY timestamp DESC
+      LIMIT ?
+    `).all(id, limit);
+
+    return success(res, {
+      device_id: id,
+      readings,
+      total: readings.length
+    }, 'Lecturas obtenidas exitosamente');
+  } catch (err) {
+    console.error('Error al obtener lecturas:', err);
+    return error(res, 'Error al obtener lecturas', 500);
+  }
+};
+
+/**
+ * Estadísticas del día para un dispositivo de energía
+ * GET /api/v1/energy/devices/:id/stats/today
+ */
+const getDeviceStatsToday = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { id } = req.params;
+
+    const device = db.prepare(`
+      SELECT * FROM devices
+      WHERE user_id = ? AND device_id = ? AND device_type = 'energy'
+    `).get(userId, id);
+
+    if (!device) {
+      return error(res, 'Dispositivo no encontrado', 404);
+    }
+
+    const stats = db.prepare(`
+      SELECT
+        ROUND(AVG(power), 2)     as avg_power_w,
+        ROUND(MAX(power), 2)     as max_power_w,
+        ROUND(MIN(power), 2)     as min_power_w,
+        ROUND(AVG(voltage), 1)   as avg_voltage_v,
+        ROUND(AVG(current), 3)   as avg_current_a,
+        ROUND((AVG(power) * (julianday(MAX(timestamp)) - julianday(MIN(timestamp))) * 24) / 1000.0, 4) as energy_kwh,
+        COUNT(*)                 as readings_count
+      FROM energy_readings
+      WHERE device_id = ?
+        AND date(timestamp) = date('now')
+    `).get(id);
+
+    return success(res, {
+      device_id: id,
+      today: stats
+    }, 'Estadísticas del día obtenidas');
+  } catch (err) {
+    console.error('Error al obtener estadísticas del día:', err);
+    return error(res, 'Error al obtener estadísticas', 500);
+  }
+};
+
 module.exports = {
   getAllDevices,
   getDeviceById,
   getTotalConsumption,
   getConsumptionHistory,
   getWeeklyStatistics,
-  controlDevice
+  controlDevice,
+  getDeviceReadings,
+  getDeviceStatsToday
 };
