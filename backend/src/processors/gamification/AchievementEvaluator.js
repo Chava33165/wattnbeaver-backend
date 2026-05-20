@@ -298,43 +298,32 @@ class AchievementEvaluator {
 
   /**
    * Calcular nivel basado en puntos totales
-   *
-   * Sistema de niveles:
-   * - Nivel 1: 0-99 puntos
-   * - Nivel 2: 100-249 puntos
-   * - Nivel 3: 250-499 puntos
-   * - Nivel 4: 500-999 puntos
-   * - Nivel 5: 1000-1999 puntos
-   * - Y así sucesivamente (cada nivel requiere más puntos)
+   * Mismos umbrales que GamificationProcessor.calculateLevel()
    */
   static calculateLevel(points) {
     if (points < 100) return 1;
-    if (points < 250) return 2;
-    if (points < 500) return 3;
+    if (points < 300) return 2;
+    if (points < 600) return 3;
     if (points < 1000) return 4;
-    if (points < 2000) return 5;
-    if (points < 3500) return 6;
-    if (points < 5500) return 7;
-    if (points < 8000) return 8;
-    if (points < 11000) return 9;
-    if (points < 15000) return 10;
-
-    // Para niveles superiores: cada 5000 puntos = 1 nivel
-    return 10 + Math.floor((points - 15000) / 5000);
+    if (points < 1500) return 5;
+    if (points < 2100) return 6;
+    if (points < 2800) return 7;
+    if (points < 3600) return 8;
+    if (points < 4500) return 9;
+    return 10;
   }
 
   /**
    * Obtener puntos necesarios para el siguiente nivel
    */
   static getPointsForNextLevel(currentLevel) {
-    const thresholds = [0, 100, 250, 500, 1000, 2000, 3500, 5500, 8000, 11000, 15000];
+    const thresholds = [0, 100, 300, 600, 1000, 1500, 2100, 2800, 3600, 4500];
 
     if (currentLevel < thresholds.length) {
       return thresholds[currentLevel];
     }
 
-    // Para niveles superiores
-    return 15000 + ((currentLevel - 10) * 5000);
+    return thresholds[thresholds.length - 1];
   }
 
   /**

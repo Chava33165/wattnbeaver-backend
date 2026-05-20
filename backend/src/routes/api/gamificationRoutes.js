@@ -7,7 +7,17 @@ const {
   getChallenges,
   startChallenge,
   getLeaderboard,
-  getStats
+  getStats,
+  getDashboard,
+  getProfileComplete,
+  getAchievementsWithProgress,
+  getChallengesWithProgress,
+  getStreak,
+  getLeaderboardOptimized,
+  getRecentAchievements,
+  getAvailableChallenges,
+  assignChallenge,
+  processGamification
 } = require('../../controllers/gamification/gamificationController');
 const { authMiddleware } = require('../../middlewares/auth');
 
@@ -80,5 +90,17 @@ router.get('/leaderboard', authMiddleware, getLeaderboard);
  *       - bearerAuth: []
  */
 router.get('/stats', authMiddleware, getStats);
+
+// Endpoints optimizados para Flutter
+router.get('/dashboard', authMiddleware, getDashboard);
+router.get('/profile/complete', authMiddleware, getProfileComplete);
+router.get('/achievements/progress', authMiddleware, getAchievementsWithProgress);
+router.get('/achievements/recent', authMiddleware, getRecentAchievements);
+router.get('/challenges/progress', authMiddleware, getChallengesWithProgress);
+router.get('/challenges/available', authMiddleware, getAvailableChallenges);
+router.post('/challenges/assign', authMiddleware, assignChallenge);
+router.get('/streak', authMiddleware, getStreak);
+router.get('/leaderboard/full', authMiddleware, getLeaderboardOptimized);
+router.post('/process', authMiddleware, processGamification);
 
 module.exports = router;
