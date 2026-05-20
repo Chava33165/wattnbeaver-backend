@@ -2,6 +2,7 @@
 const readingsService = require('../../services/readingsService');
 const Device = require('../../models/Device');
 const { success, error } = require('../../utils/response');
+const GamificationProcessor = require('../../processors/gamification/GamificationProcessor');
 
 /**
  * Validar datos de sensor de agua
@@ -107,6 +108,10 @@ const ingestWater = async (req, res) => {
 
     console.log(`💧 Lectura de agua guardada: ${device_id} | Flow: ${readingData.flow} L/min | Total: ${readingData.total} L`);
 
+    // Disparar gamificación en background (sin bloquear la respuesta)
+    GamificationProcessor.processUser(device.user_id, { skipAchievements: false, skipChallenges: false })
+      .catch(err => console.error(`⚠️ Error en gamificación post-ingesta agua: ${err.message}`));
+
     return success(res, {
       id: result,
       device_id: device_id,
@@ -195,6 +200,10 @@ const ingestEnergy = async (req, res) => {
     }
 
     console.log(`⚡ Lectura de energía guardada: ${device_id} | Power: ${readingData.power}W | Voltage: ${readingData.voltage}V | Current: ${readingData.current}A`);
+
+    // Disparar gamificación en background (sin bloquear la respuesta)
+    GamificationProcessor.processUser(device.user_id, { skipAchievements: false, skipChallenges: false })
+      .catch(err => console.error(`⚠️ Error en gamificación post-ingesta energía: ${err.message}`));
 
     return success(res, {
       id: result,

@@ -170,42 +170,32 @@ class StreakCalculator {
   }
 
   /**
-   * Verificar si el usuario cumplió objetivo hoy
-   * (Comparar consumo de hoy vs promedio de últimos 7 días)
+   * Verificar si el usuario tuvo actividad hoy
+   * (Al menos una lectura de energía o agua en el día = día de racha)
    */
   static async checkDailyGoal(userId) {
-    // Obtener consumo de energía de hoy
-    const todayEnergy = db.prepare(`
-      SELECT COALESCE(SUM(energy), 0) as total
+    const energyCount = db.prepare(`
+      SELECT COUNT(*) as count
       FROM energy_readings
       WHERE user_id = ?
         AND DATE(timestamp) = DATE('now')
     `).get(userId);
 
-    // Obtener promedio de últimos 7 días (excluyendo hoy)
-    const avgEnergy = db.prepare(`
-      SELECT COALESCE(AVG(daily_total), 0) as average
-      FROM (
-        SELECT DATE(timestamp) as date, SUM(energy) as daily_total
-        FROM energy_readings
-        WHERE user_id = ?
-          AND DATE(timestamp) >= DATE('now', '-7 days')
-          AND DATE(timestamp) < DATE('now')
-        GROUP BY DATE(timestamp)
-      )
+    const waterCount = db.prepare(`
+      SELECT COUNT(*) as count
+      FROM water_readings
+      WHERE user_id = ?
+        AND DATE(timestamp) = DATE('now')
     `).get(userId);
 
-    // Si hoy consumió menos o igual que el promedio, cumplió el objetivo
-    const metGoal = todayEnergy.total <= avgEnergy.average;
+    const totalReadings = energyCount.count + waterCount.count;
+    const metGoal = totalReadings > 0;
 
     return {
       metGoal,
-      todayConsumption: todayEnergy.total,
-      averageConsumption: avgEnergy.average,
-      difference: avgEnergy.average - todayEnergy.total,
-      percentChange: avgEnergy.average > 0
-        ? ((todayEnergy.total - avgEnergy.average) / avgEnergy.average * 100).toFixed(1)
-        : 0
+      energyReadings: energyCount.count,
+      waterReadings: waterCount.count,
+      totalReadings
     };
   }
 

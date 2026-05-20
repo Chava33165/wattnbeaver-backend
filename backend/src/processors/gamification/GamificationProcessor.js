@@ -46,6 +46,28 @@ class GamificationProcessor {
       if (!skipStreak) {
         result.streak = await StreakCalculator.evaluateDailyStreak(userId);
 
+        // Si la racha subió, dar 25 puntos por el día de racha
+        if (result.streak.updated && result.streak.currentStreak > result.streak.previousStreak) {
+          const streakPoints = 25;
+          const profile = db.prepare('SELECT total_points, current_level FROM user_gamification WHERE user_id = ?').get(userId);
+          const newPoints = (profile?.total_points || 0) + streakPoints;
+          const newLevel = this.calculateLevel(newPoints);
+
+          db.prepare(`
+            UPDATE user_gamification
+            SET total_points = ?, current_level = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE user_id = ?
+          `).run(newPoints, newLevel, userId);
+
+          result.streak_points = {
+            earned: streakPoints,
+            total_points: newPoints,
+            reason: `Día ${result.streak.currentStreak} de racha`
+          };
+
+          console.log(`⚡ +${streakPoints} pts por racha día ${result.streak.currentStreak} → usuario ${userId} (total: ${newPoints})`);
+        }
+
         // Si alcanzó un hito de racha, crear notificación
         if (result.streak.milestone && result.streak.milestone.reached) {
           result.notifications.push({
@@ -121,6 +143,22 @@ class GamificationProcessor {
     }
 
     return results;
+  }
+
+  /**
+   * Calcular nivel basado en puntos totales
+   */
+  static calculateLevel(points) {
+    if (points < 100) return 1;
+    if (points < 300) return 2;
+    if (points < 600) return 3;
+    if (points < 1000) return 4;
+    if (points < 1500) return 5;
+    if (points < 2100) return 6;
+    if (points < 2800) return 7;
+    if (points < 3600) return 8;
+    if (points < 4500) return 9;
+    return 10;
   }
 
   /**
