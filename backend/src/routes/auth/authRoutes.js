@@ -2,7 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const { login, register, getProfile, getAllUsers } = require('../../controllers/auth/authController');
-const { authMiddleware } = require('../../middlewares/auth');
+const { authMiddleware, adminOnly } = require('../../middlewares/auth');
 
 /**
  * @swagger
@@ -100,6 +100,6 @@ router.get('/profile', authMiddleware, getProfile);
  *       403:
  *         description: No autorizado
  */
-router.get('/users', authMiddleware, getAllUsers);
+router.get('/users', authMiddleware, adminOnly, getAllUsers);
 
 module.exports = router;

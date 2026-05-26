@@ -79,5 +79,7 @@ router.use('/households', householdRoutes);
 // Rutas de ingesta (para dispositivos ESP32 vía HTTPS)
 router.use('/ingest', ingestRoutes);
 
+// Rutas de administración (solo admin)
+router.use('/admin', require('./admin/adminRoutes'));
 
 module.exports = router;

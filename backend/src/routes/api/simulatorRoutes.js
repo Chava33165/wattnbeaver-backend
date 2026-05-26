@@ -3,7 +3,7 @@ const express = require('express');
 const router = express.Router();
 const dataSimulator = require('../../services/dataSimulator');
 const { success, error } = require('../../utils/response');
-const { authMiddleware } = require('../../middlewares/auth');
+const { authMiddleware, adminOnly } = require('../../middlewares/auth');
 
 /**
  * @swagger
@@ -31,7 +31,7 @@ const { authMiddleware } = require('../../middlewares/auth');
  *       401:
  *         description: No autenticado
  */
-router.post('/start', authMiddleware, (req, res) => {
+router.post('/start', authMiddleware, adminOnly, (req, res) => {
   try {
     const { interval = 5000 } = req.body;
     dataSimulator.start(parseInt(interval));
@@ -57,7 +57,7 @@ router.post('/start', authMiddleware, (req, res) => {
  *       401:
  *         description: No autenticado
  */
-router.post('/stop', authMiddleware, (req, res) => {
+router.post('/stop', authMiddleware, adminOnly, (req, res) => {
   try {
     dataSimulator.stop();
     return success(res, dataSimulator.getStatus(), 'Simulador detenido');
@@ -114,7 +114,7 @@ router.post('/stop', authMiddleware, (req, res) => {
  *       401:
  *         description: No autenticado
  */
-router.get('/status', authMiddleware, (req, res) => {
+router.get('/status', authMiddleware, adminOnly, (req, res) => {
   try {
     return success(res, dataSimulator.getStatus(), 'Estado del simulador');
   } catch (err) {

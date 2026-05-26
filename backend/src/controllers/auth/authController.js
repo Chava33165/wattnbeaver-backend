@@ -16,7 +16,7 @@ const register = async (req, res) => {
     const { name, email, password } = req.body;
     
     // Crear usuario en la base de datos
-    const newUser = await User.create({ name, email, password });
+    const newUser = await User.create({ name, email, password, role: 'user' });
 
     // Generar token
     const token = generateToken({
@@ -138,24 +138,10 @@ const getProfile = async (req, res) => {
  */
 const getAllUsers = async (req, res) => {
   try {
-    // Verificar que sea admin
-    if (req.user.role !== 'admin') {
-      return error(res, 'No autorizado', 403);
-    }
-
     const users = await User.findAll();
-    
     return success(res, {
-      users: [
-        {
-          id: 'user_admin',
-          name: 'Administrador',
-          email: 'admin@wattnbeaber.com',
-          role: 'admin'
-        },
-        ...users.map(u => u.toJSON())
-      ],
-      total: users.length + 1
+      users: users.map(u => u.toJSON()),
+      total: users.length
     }, 'Usuarios obtenidos');
 
   } catch (err) {
