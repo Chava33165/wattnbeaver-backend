@@ -12,10 +12,15 @@ const getAllUsers = async (req, res) => {
       SELECT u.id, u.name, u.email, u.role, u.avatar, u.created_at,
         COALESCE(g.total_points, 0) AS total_points,
         COALESCE(g.current_level, 1) AS current_level,
-        COALESCE(g.current_streak, 0) AS current_streak
+        COALESCE(g.current_streak, 0) AS current_streak,
+        g.last_activity_date,
+        CAST(
+          julianday('now', 'localtime') -
+          julianday(COALESCE(g.last_activity_date, u.created_at))
+        AS INTEGER) AS days_inactive
       FROM users u
       LEFT JOIN user_gamification g ON g.user_id = u.id
-      ORDER BY u.created_at DESC
+      ORDER BY days_inactive DESC
     `).all();
     return success(res, { users: rows, total: rows.length }, 'Usuarios obtenidos');
   } catch (err) {
@@ -29,7 +34,12 @@ const getUserById = async (req, res) => {
       SELECT u.id, u.name, u.email, u.role, u.avatar, u.created_at,
         COALESCE(g.total_points, 0) AS total_points,
         COALESCE(g.current_level, 1) AS current_level,
-        COALESCE(g.current_streak, 0) AS current_streak
+        COALESCE(g.current_streak, 0) AS current_streak,
+        g.last_activity_date,
+        CAST(
+          julianday('now', 'localtime') -
+          julianday(COALESCE(g.last_activity_date, u.created_at))
+        AS INTEGER) AS days_inactive
       FROM users u
       LEFT JOIN user_gamification g ON g.user_id = u.id
       WHERE u.id = ?
@@ -85,6 +95,20 @@ const deleteUser = async (req, res) => {
     if (id === req.user.id) return error(res, 'No puedes eliminarte a ti mismo', 403);
     const user = await User.findById(id);
     if (!user) return error(res, 'Usuario no encontrado', 404);
+
+    const activity = db.prepare(`
+      SELECT CAST(
+        julianday('now', 'localtime') -
+        julianday(COALESCE(g.last_activity_date, u.created_at))
+      AS INTEGER) AS days_inactive
+      FROM users u
+      LEFT JOIN user_gamification g ON g.user_id = u.id
+      WHERE u.id = ?
+    `).get(id);
+
+    if (activity.days_inactive < 5)
+      return error(res, `No se puede eliminar: el usuario lleva ${activity.days_inactive} día(s) de inactividad. Se requieren mínimo 5.`, 403);
+
     await User.delete(id);
     return success(res, { deleted: true }, 'Usuario eliminado');
   } catch (err) {
