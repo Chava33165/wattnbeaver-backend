@@ -117,7 +117,8 @@ router.put('/:id', authMiddleware, updateDevice);
  *     security:
  *       - bearerAuth: []
  */
-router.delete('/:id', authMiddleware, unlinkDevice);
+router.delete('/:id',        authMiddleware, unlinkDevice);
+router.post('/:id/unlink',   authMiddleware, unlinkDevice); // workaround Cloudflare WAF
 
 /**
  * @swagger
