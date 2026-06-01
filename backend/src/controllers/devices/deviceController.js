@@ -172,8 +172,18 @@ const unlinkDevice = async (req, res) => {
       return error(res, 'No tienes permiso para desvincular este dispositivo', 403);
     }
 
-    // Eliminar
-    await Device.delete(id);
+    // Cascade delete en transacción (FK constraints activas)
+    db.prepare('BEGIN').run();
+    try {
+      db.prepare(`DELETE FROM energy_readings WHERE device_id = ?`).run(device.device_id);
+      db.prepare(`DELETE FROM water_readings  WHERE device_id = ?`).run(device.device_id);
+      db.prepare(`DELETE FROM alerts          WHERE device_id = ?`).run(device.device_id);
+      db.prepare(`DELETE FROM devices         WHERE device_id = ?`).run(device.device_id);
+      db.prepare('COMMIT').run();
+    } catch (txErr) {
+      db.prepare('ROLLBACK').run();
+      throw txErr;
+    }
 
     return success(res, null, 'Dispositivo desvinculado exitosamente');
 
