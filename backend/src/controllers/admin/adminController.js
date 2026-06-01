@@ -109,7 +109,32 @@ const deleteUser = async (req, res) => {
     if (activity.days_inactive < 5)
       return error(res, `No se puede eliminar: el usuario lleva ${activity.days_inactive} día(s) de inactividad. Se requieren mínimo 5.`, 403);
 
-    await User.delete(id);
+    // Cascade delete en transacción (FK constraints activas)
+    db.prepare('BEGIN').run();
+    try {
+      db.prepare(`DELETE FROM notifications     WHERE user_id = ?`).run(id);
+      db.prepare(`DELETE FROM user_challenges   WHERE user_id = ?`).run(id);
+      db.prepare(`DELETE FROM user_achievements WHERE user_id = ?`).run(id);
+      db.prepare(`DELETE FROM user_gamification WHERE user_id = ?`).run(id);
+      db.prepare(`DELETE FROM alerts            WHERE user_id = ?`).run(id);
+      db.prepare(`DELETE FROM water_readings    WHERE user_id = ?`).run(id);
+      db.prepare(`DELETE FROM energy_readings   WHERE user_id = ?`).run(id);
+      db.prepare(`DELETE FROM household_members WHERE user_id = ?`).run(id);
+      // Eliminar hogares donde el usuario era dueño (y sus miembros restantes)
+      const ownedHouseholds = db.prepare(`SELECT id FROM households WHERE owner_id = ?`).all(id);
+      for (const h of ownedHouseholds) {
+        db.prepare(`DELETE FROM household_members WHERE household_id = ?`).run(h.id);
+        db.prepare(`DELETE FROM devices           WHERE household_id = ?`).run(h.id);
+        db.prepare(`DELETE FROM households        WHERE id = ?`).run(h.id);
+      }
+      db.prepare(`DELETE FROM devices WHERE user_id = ?`).run(id);
+      db.prepare(`DELETE FROM users   WHERE id = ?`).run(id);
+      db.prepare('COMMIT').run();
+    } catch (txErr) {
+      db.prepare('ROLLBACK').run();
+      throw txErr;
+    }
+
     return success(res, { deleted: true }, 'Usuario eliminado');
   } catch (err) {
     return error(res, 'Error al eliminar usuario', 500);
