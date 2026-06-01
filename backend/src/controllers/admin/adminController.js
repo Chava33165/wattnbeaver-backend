@@ -4,6 +4,7 @@ const User = require('../../models/User');
 const GamificationProcessor = require('../../processors/gamification/GamificationProcessor');
 const db = require('../../services/database');
 const { success, error } = require('../../utils/response');
+const { execSync } = require('child_process');
 
 const getAllUsers = async (req, res) => {
   try {
@@ -64,6 +65,20 @@ const updateUser = async (req, res) => {
   }
 };
 
+const createAdminUser = async (req, res) => {
+  try {
+    const { name, email, password } = req.body;
+    if (!name || !email || !password)
+      return error(res, 'Nombre, email y contraseña son requeridos', 400);
+    const newUser = await User.create({ name, email, password, role: 'admin' });
+    return success(res, { user: newUser.toJSON() }, 'Usuario admin creado exitosamente', 201);
+  } catch (err) {
+    if (err.message.includes('ya está registrado'))
+      return error(res, err.message, 409);
+    return error(res, err.message || 'Error al crear usuario admin', 400);
+  }
+};
+
 const deleteUser = async (req, res) => {
   try {
     const { id } = req.params;
@@ -103,21 +118,61 @@ const getSystemStats = async (req, res) => {
 
 const getServerHealth = async (req, res) => {
   try {
-    const total = os.totalmem(), free = os.freemem(), used = total - free;
+    const totalMem = os.totalmem(), freeMem = os.freemem(), usedMem = totalMem - freeMem;
+
+    // Temperatura CPU (Raspberry Pi thermal zone o vcgencmd)
     let cpuTemp = null;
     try {
       cpuTemp = parseFloat((parseInt(fs.readFileSync('/sys/class/thermal/thermal_zone0/temp', 'utf8').trim()) / 1000).toFixed(1));
-    } catch (_) {}
+    } catch (_) {
+      try {
+        const vcg = execSync('vcgencmd measure_temp 2>/dev/null', { timeout: 2000 }).toString();
+        const match = vcg.match(/temp=([\d.]+)/);
+        if (match) cpuTemp = parseFloat(match[1]);
+      } catch (_) {}
+    }
+
+    // Disco — sistema de archivos principal y /boot si existe
+    const diskInfo = {};
+    for (const mountpoint of ['/', '/boot/firmware', '/boot']) {
+      try {
+        const s = fs.statfsSync(mountpoint);
+        const totalBytes = s.blocks * s.bsize;
+        const freeBytes  = s.bfree  * s.bsize;
+        const usedBytes  = totalBytes - freeBytes;
+        diskInfo[mountpoint] = {
+          total_gb:      parseFloat((totalBytes / 1024 ** 3).toFixed(1)),
+          used_gb:       parseFloat((usedBytes  / 1024 ** 3).toFixed(1)),
+          free_gb:       parseFloat((freeBytes  / 1024 ** 3).toFixed(1)),
+          usage_percent: parseFloat(((usedBytes / totalBytes) * 100).toFixed(1)),
+        };
+      } catch (_) {}
+    }
+
+    // CPU — uso promedio del último minuto
+    const loadAvg = os.loadavg();
+    const cpuCount = os.cpus().length;
+
     return success(res, {
       memory: {
-        total_mb:     parseFloat((total / 1024 / 1024).toFixed(1)),
-        used_mb:      parseFloat((used  / 1024 / 1024).toFixed(1)),
-        free_mb:      parseFloat((free  / 1024 / 1024).toFixed(1)),
-        usage_percent: parseFloat(((used / total) * 100).toFixed(1))
+        total_mb:      parseFloat((totalMem / 1024 ** 2).toFixed(1)),
+        used_mb:       parseFloat((usedMem  / 1024 ** 2).toFixed(1)),
+        free_mb:       parseFloat((freeMem  / 1024 ** 2).toFixed(1)),
+        usage_percent: parseFloat(((usedMem / totalMem) * 100).toFixed(1)),
       },
-      cpu_temp_celsius: cpuTemp,
+      cpu: {
+        temp_celsius:    cpuTemp,
+        cores:           cpuCount,
+        model:           os.cpus()[0]?.model || null,
+        load_avg_1m:     parseFloat((loadAvg[0]).toFixed(2)),
+        load_avg_5m:     parseFloat((loadAvg[1]).toFixed(2)),
+        load_avg_15m:    parseFloat((loadAvg[2]).toFixed(2)),
+        load_percent_1m: parseFloat(((loadAvg[0] / cpuCount) * 100).toFixed(1)),
+      },
+      disk: diskInfo,
       uptime_seconds: Math.floor(os.uptime()),
-      platform: os.platform(),
+      platform:    os.platform(),
+      arch:        os.arch(),
       node_version: process.version,
     }, 'Salud del servidor');
   } catch (err) {
@@ -125,4 +180,4 @@ const getServerHealth = async (req, res) => {
   }
 };
 
-module.exports = { getAllUsers, getUserById, updateUser, deleteUser, getSystemStats, getServerHealth };
+module.exports = { getAllUsers, getUserById, createAdminUser, updateUser, deleteUser, getSystemStats, getServerHealth };
