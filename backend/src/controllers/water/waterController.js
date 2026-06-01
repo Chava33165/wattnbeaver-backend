@@ -106,7 +106,7 @@ const getTotalConsumption = async (req, res) => {
           MAX(total) - MIN(total) as daily_consumption
         FROM water_readings
         WHERE device_id IN (${placeholders})
-          AND date(timestamp) = date('now')
+          AND date(timestamp, 'localtime') = date('now', 'localtime')
         GROUP BY device_id
       )
     `).get(...deviceIds);
@@ -152,14 +152,14 @@ const getConsumptionHistory = async (req, res) => {
     // NOTA: total es ACUMULATIVO, por eso usamos MAX - MIN
     const history = db.prepare(`
       SELECT
-        strftime('%Y-%m-%dT%H:00:00', timestamp) as hour,
+        strftime('%Y-%m-%dT%H:00:00', timestamp, 'localtime') as hour,
         AVG(flow) as avg_flow,
         MAX(total) - MIN(total) as total_volume,
         COUNT(*) as readings_count
       FROM water_readings
       WHERE device_id IN (${placeholders})
         AND timestamp > ${timeFilter}
-      GROUP BY hour
+      GROUP BY strftime('%Y-%m-%d %H', timestamp, 'localtime')
       ORDER BY hour ASC
     `).all(...deviceIds);
 
@@ -201,8 +201,8 @@ const getWeeklyStatistics = async (req, res) => {
     // NOTA: total es ACUMULATIVO, por eso usamos MAX - MIN
     const statistics = db.prepare(`
       SELECT
-        date(w.timestamp) as fecha,
-        CASE cast(strftime('%w', w.timestamp) as integer)
+        date(w.timestamp, 'localtime') as fecha,
+        CASE cast(strftime('%w', w.timestamp, 'localtime') as integer)
           WHEN 0 THEN 'Domingo'
           WHEN 1 THEN 'Lunes'
           WHEN 2 THEN 'Martes'
@@ -219,9 +219,9 @@ const getWeeklyStatistics = async (req, res) => {
         ROUND(MAX(w.total) - MIN(w.total), 3) as consumo_dia_litros
       FROM water_readings w
       WHERE w.device_id IN (${placeholders})
-        AND date(w.timestamp) >= date(?)
-        AND date(w.timestamp) <= date(?)
-      GROUP BY date(w.timestamp)
+        AND date(w.timestamp, 'localtime') >= date(?)
+        AND date(w.timestamp, 'localtime') <= date(?)
+      GROUP BY date(w.timestamp, 'localtime')
       ORDER BY fecha ASC
     `).all(...deviceIds, startDate, endDate);
 
@@ -326,7 +326,7 @@ const getSensorStatsToday = async (req, res) => {
         COUNT(*)                                 as readings_count
       FROM water_readings
       WHERE device_id = ?
-        AND date(timestamp) = date('now')
+        AND date(timestamp, 'localtime') = date('now', 'localtime')
     `).get(id);
 
     return success(res, {

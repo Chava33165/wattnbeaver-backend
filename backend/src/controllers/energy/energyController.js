@@ -107,7 +107,7 @@ const getTotalConsumption = async (req, res) => {
           (julianday(MAX(timestamp)) - julianday(MIN(timestamp))) * 24 as hours_elapsed
         FROM energy_readings
         WHERE device_id IN (${placeholders})
-          AND date(timestamp) = date('now')
+          AND date(timestamp, 'localtime') = date('now', 'localtime')
         GROUP BY device_id
       )
     `).get(...deviceIds);
@@ -212,8 +212,8 @@ const getWeeklyStatistics = async (req, res) => {
     // NOTA 2: También calculamos energía desde potencia porque el campo energy del Sonoff suele tener errores
     const statistics = db.prepare(`
       SELECT
-        date(e.timestamp) as fecha,
-        CASE cast(strftime('%w', e.timestamp) as integer)
+        date(e.timestamp, 'localtime') as fecha,
+        CASE cast(strftime('%w', e.timestamp, 'localtime') as integer)
           WHEN 0 THEN 'Domingo'
           WHEN 1 THEN 'Lunes'
           WHEN 2 THEN 'Martes'
@@ -233,9 +233,9 @@ const getWeeklyStatistics = async (req, res) => {
         ROUND((julianday(MAX(e.timestamp)) - julianday(MIN(e.timestamp))) * 24, 2) as horas_transcurridas
       FROM energy_readings e
       WHERE e.device_id IN (${placeholders})
-        AND date(e.timestamp) >= date(?)
-        AND date(e.timestamp) <= date(?)
-      GROUP BY date(e.timestamp)
+        AND date(e.timestamp, 'localtime') >= date(?)
+        AND date(e.timestamp, 'localtime') <= date(?)
+      GROUP BY date(e.timestamp, 'localtime')
       ORDER BY fecha ASC
     `).all(...deviceIds, startDate, endDate);
 
@@ -423,7 +423,7 @@ const getDeviceStatsToday = async (req, res) => {
         COUNT(*)                 as readings_count
       FROM energy_readings
       WHERE device_id = ?
-        AND date(timestamp) = date('now')
+        AND date(timestamp, 'localtime') = date('now', 'localtime')
     `).get(id);
 
     return success(res, {
