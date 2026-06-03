@@ -2,6 +2,32 @@
 const Device = require('../../models/Device');
 const { success, error } = require('../../utils/response');
 const db = require('../../services/database');
+const alertManager = require('../../processors/alerts/alertManager');
+
+function calcStreak(deviceId, deviceType) {
+  const table = deviceType === 'energy' ? 'energy_readings' : 'water_readings';
+  const rows = db.prepare(`
+    SELECT DISTINCT date(timestamp, 'localtime') as fecha
+    FROM ${table}
+    WHERE device_id = ?
+    ORDER BY fecha DESC
+  `).all(deviceId);
+  if (!rows.length) return 0;
+  let streak = 0;
+  const toDateStr = (d) => d.toISOString().split('T')[0];
+  let expected = toDateStr(new Date());
+  for (const row of rows) {
+    if (row.fecha === expected) {
+      streak++;
+      const prev = new Date(expected);
+      prev.setDate(prev.getDate() - 1);
+      expected = toDateStr(prev);
+    } else {
+      break;
+    }
+  }
+  return streak;
+}
 
 /**
  * Vincular nuevo dispositivo
@@ -73,7 +99,11 @@ const getMyDevices = async (req, res) => {
         current_reading = row || null;
       }
 
-      return { ...json, current_reading };
+      if (current_reading?.timestamp) {
+        alertManager.checkDeviceOffline(d.device_id, d.device_name, current_reading.timestamp);
+      }
+      const streak = calcStreak(d.device_id, d.device_type);
+      return { ...json, current_reading, streak };
     });
 
     return success(res, {

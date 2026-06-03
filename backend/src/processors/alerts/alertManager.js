@@ -5,6 +5,7 @@ class AlertManager {
   constructor() {
     this.alerts = [];
     this.maxAlerts = 100;
+    this.deviceOfflineAlerted = new Set();
     this.alertRules = {
       energy: {
         highPower: { threshold: 2000, severity: 'warning' },
@@ -257,6 +258,40 @@ class AlertManager {
       return true;
     }
     return false;
+  }
+
+  /**
+   * Detectar sensor offline y crear alerta crítica (una sola vez por dispositivo)
+   */
+  checkDeviceOffline(deviceId, deviceName, lastTimestamp) {
+    const msInactive = Date.now() - new Date(lastTimestamp);
+    if (msInactive > 10 * 60 * 1000 && !this.deviceOfflineAlerted.has(deviceId)) {
+      const minutesInactive = Math.floor(msInactive / 60000);
+      this.createAlert(
+        'system',
+        deviceId,
+        `El sensor ${deviceName} dejó de medir ⚠️`,
+        'critical',
+        { last_seen: new Date(lastTimestamp).toISOString(), minutes_inactive: minutesInactive }
+      );
+      this.deviceOfflineAlerted.add(deviceId);
+    }
+  }
+
+  /**
+   * Registrar sensor que volvió a estar activo
+   */
+  markDeviceOnline(deviceId, deviceName) {
+    if (this.deviceOfflineAlerted.has(deviceId)) {
+      this.createAlert(
+        'system',
+        deviceId,
+        `El sensor ${deviceName} está midiendo nuevamente ✅`,
+        'info',
+        {}
+      );
+      this.deviceOfflineAlerted.delete(deviceId);
+    }
   }
 
   /**

@@ -3,6 +3,8 @@ const readingsService = require('../../services/readingsService');
 const Device = require('../../models/Device');
 const { success, error } = require('../../utils/response');
 const GamificationProcessor = require('../../processors/gamification/GamificationProcessor');
+const alertManager = require('../../processors/alerts/alertManager');
+const db = require('../../services/database');
 
 /**
  * Validar datos de sensor de agua
@@ -100,6 +102,14 @@ const ingestWater = async (req, res) => {
     // Guardar lectura usando el servicio existente
     // Usar device_id del dispositivo autenticado si existe (más confiable que el del body)
     const effectiveDeviceId = req.device ? req.device.device_id : device_id;
+
+    const prevWaterReading = db.prepare(
+      'SELECT timestamp FROM water_readings WHERE device_id = ? ORDER BY timestamp DESC LIMIT 1'
+    ).get(effectiveDeviceId);
+    if (prevWaterReading && (Date.now() - new Date(prevWaterReading.timestamp)) > 10 * 60 * 1000) {
+      alertManager.markDeviceOnline(effectiveDeviceId, device.device_name);
+    }
+
     const result = await readingsService.saveWaterReading(effectiveDeviceId, readingData);
 
     if (result === null) {
@@ -191,6 +201,13 @@ const ingestEnergy = async (req, res) => {
     // Usar device_id del dispositivo autenticado si existe (más confiable que el del body)
     const effectiveDeviceId = req.device ? req.device.device_id : device_id;
     console.log(`💾 [ingestEnergy] Guardando lectura para device_id=${effectiveDeviceId}`);
+
+    const prevEnergyReading = db.prepare(
+      'SELECT timestamp FROM energy_readings WHERE device_id = ? ORDER BY timestamp DESC LIMIT 1'
+    ).get(effectiveDeviceId);
+    if (prevEnergyReading && (Date.now() - new Date(prevEnergyReading.timestamp)) > 10 * 60 * 1000) {
+      alertManager.markDeviceOnline(effectiveDeviceId, device.device_name);
+    }
 
     const result = await readingsService.saveEnergyReading(effectiveDeviceId, readingData);
 

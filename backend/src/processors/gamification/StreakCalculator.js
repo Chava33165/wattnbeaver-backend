@@ -1,6 +1,7 @@
 // src/processors/gamification/StreakCalculator.js
 const moment = require('moment');
 const db = require('../../services/database');
+const alertManager = require('../alerts/alertManager');
 
 /**
  * Calculador de Rachas
@@ -124,6 +125,14 @@ class StreakCalculator {
       `).run(newStreak, newBestStreak, today, userId);
 
       console.log(`🔥 Racha actualizada para ${userId}: ${newStreak} días (mejor: ${newBestStreak})`);
+
+      const milestone = this.getStreakMilestone(newStreak);
+      if (milestone.reached) {
+        alertManager.createAlert('system', null, milestone.message, 'info', {
+          streak: newStreak,
+          user_id: userId
+        });
+      }
     }
 
     return {
@@ -178,14 +187,14 @@ class StreakCalculator {
       SELECT COUNT(*) as count
       FROM energy_readings
       WHERE user_id = ?
-        AND DATE(timestamp) = DATE('now')
+        AND DATE(timestamp, 'localtime') = DATE('now', 'localtime')
     `).get(userId);
 
     const waterCount = db.prepare(`
       SELECT COUNT(*) as count
       FROM water_readings
       WHERE user_id = ?
-        AND DATE(timestamp) = DATE('now')
+        AND DATE(timestamp, 'localtime') = DATE('now', 'localtime')
     `).get(userId);
 
     const totalReadings = energyCount.count + waterCount.count;
